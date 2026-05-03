@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bankroll Manager — Poker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0d0f12; --bg2: #13161b; --bg3: #1a1e25;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+    --text: #e8eaf0; --muted: #6b7280;
+    --accent: #00d9a0; --accent2: #00b584;
+    --red: #f05252; --amber: #f59e0b; --blue: #3b82f6; --purple: #a78bfa;
+    --font: 'DM Sans', sans-serif; --mono: 'DM Mono', monospace;
+    --radius: 10px; --radius-lg: 16px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,15,18,0.92); backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+  }
+  .nav-logo { font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--accent); letter-spacing: 0.08em; display: flex; align-items: center; gap: 8px; }
+  .nav-logo svg { width: 20px; height: 20px; }
+  .nav-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+  .nav-tab { font-size: 13px; font-weight: 400; padding: 6px 14px; border: none; background: none; cursor: pointer; color: var(--muted); border-radius: 6px; transition: all 0.15s; }
+  .nav-tab:hover { color: var(--text); background: var(--bg3); }
+  .nav-tab.active { color: var(--accent); background: rgba(0,217,160,0.08); }
+
+  #income-strip { background: var(--bg2); border-bottom: 0.5px solid var(--border); padding: 10px 2rem; }
+  .strip-container { max-width: 1280px; margin: 0 auto; display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+  .strip-label { display: flex; align-items: center; gap: 8px; padding-right: 20px; margin-right: 20px; border-right: 0.5px solid var(--border2); }
+  .strip-label span { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+  .strip-item { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 20px; border-right: 0.5px solid var(--border); min-width: 140px; }
+  .strip-item:last-child { border-right: none; }
+  .strip-item .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 500; }
+  .strip-item .val { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--text); }
+  .strip-item .sub { font-size: 10px; color: var(--muted); }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+  .section { display: none; animation: fadeIn 0.2s ease; }
+  .section.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; gap: 12px; flex-wrap: wrap; }
+  .section-header h2 { font-size: 18px; font-weight: 500; }
+  .section-header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 2rem; }
+  .metric { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .metric .lbl { font-size: 11px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .metric .val { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text); }
+  .metric .val.pos { color: var(--accent); }
+  .metric .val.neg { color: var(--red); }
+  .metric .sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+  .card-title { font-size: 12px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem; }
+
+  .chart-wrap { position: relative; width: 100%; height: 260px; }
+
+  .sites-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .site-item { background: var(--bg3); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+  .site-item .sname { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .site-item .sval { font-family: var(--mono); font-size: 14px; font-weight: 500; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+  tbody td { padding: 10px 12px; border-bottom: 0.5px solid var(--border); white-space: nowrap; font-family: var(--mono); font-size: 12px; }
+  tbody td.sans { font-family: var(--font); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg3); }
+
+  .badge { font-family: var(--font); font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 20px; display: inline-block; }
+  .b-grind { background: rgba(0,217,160,0.12); color: var(--accent); }
+  .b-mov { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .b-pend { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .b-rec { background: rgba(0,217,160,0.12); color: var(--accent); }
+  .b-pos { background: rgba(0,217,160,0.12); color: var(--accent); }
+  .b-neg { background: rgba(240,82,82,0.12); color: var(--red); }
+
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .form-group .hint { font-size: 10px; color: var(--muted); font-style: italic; }
+  .form-group input, .form-group select, .form-group textarea {
+    font-family: var(--font); font-size: 13px; padding: 9px 12px;
+    background: var(--bg3); border: 0.5px solid var(--border2);
+    border-radius: var(--radius); color: var(--text); outline: none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .form-section-title { font-size: 11px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 1.25rem 0 0.75rem; padding-top: 1.25rem; border-top: 0.5px solid var(--border); }
+  .sites-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .form-actions { display: flex; gap: 10px; margin-top: 1.5rem; flex-wrap: wrap; }
+
+  .btn { font-family: var(--font); font-size: 13px; font-weight: 500; padding: 9px 20px; border: 0.5px solid var(--border2); border-radius: var(--radius); cursor: pointer; background: transparent; color: var(--text); transition: all 0.15s; }
+  .btn:hover { background: var(--bg3); }
+  .btn-primary { background: var(--accent); color: #0d0f12; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); }
+  .btn-danger { color: var(--red); border-color: rgba(240,82,82,0.3); }
+  .btn-danger:hover { background: rgba(240,82,82,0.08); }
+  .btn-sm { font-size: 11px; padding: 5px 12px; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+.preview-box { background: var(--bg3); border-radius: var(--radius); padding: 14px 18px; margin-top: 1rem; border: 0.5px dashed var(--border2); }
+  .preview-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; font-size: 13px; }
+  .preview-row:not(:last-child) { border-bottom: 0.5px solid var(--border); }
+  .preview-row .k { color: var(--muted); font-size: 12px; }
+  .preview-row .v { font-family: var(--mono); font-weight: 500; }
+
+  .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 13px; }
+  .empty a { color: var(--accent); cursor: pointer; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; background: var(--accent); color: #0d0f12; font-size: 13px; font-weight: 500; padding: 10px 18px; border-radius: var(--radius); opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.danger { background: var(--red); color: white; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--bg2); border: 0.5px solid var(--border2); border-radius: var(--radius-lg); padding: 1.5rem; max-width: 680px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1.25rem; justify-content: flex-end; flex-wrap: wrap; }
+
+  .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); }
+  .filter-bar select, .filter-bar input[type="date"] { font-size: 12px; padding: 5px 10px; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: var(--radius); color: var(--text); cursor: pointer; font-family: var(--font); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    BANKROLL MGR
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="nav-tab" onclick="switchTab('sessoes')">Sessões</button>
+    <button class="nav-tab" onclick="switchTab('movimentacao')">Movimentação</button>
+    <button class="nav-tab" onclick="switchTab('resumo')">Resumo Anual</button>
+    <button class="nav-tab" onclick="switchTab('fields')">Fields</button>
+    <button class="nav-tab" onclick="openImportModal()" style="color:var(--amber);">⇅ Import/Export</button>
+  </div>
+</nav>
+
+<div id="income-strip">
+  <div class="strip-container">
+    <div class="strip-label"><span>Entradas totais</span></div>
+    <div class="strip-item"><span class="lbl" style="color:var(--purple);">Dividendos</span><span class="val" id="s-div">$0,00</span><span class="sub" id="s-div-q">0 registros</span></div>
+    <div class="strip-item"><span class="lbl" style="color:var(--blue);">Jogador</span><span class="val" id="s-jog">$0,00</span><span class="sub" id="s-jog-q">0 registros</span></div>
+    <div class="strip-item"><span class="lbl" style="color:var(--accent);">Salário</span><span class="val" id="s-sal">$0,00</span><span class="sub" id="s-sal-q">0 registros</span></div>
+    <div class="strip-item"><span class="lbl" style="color:var(--muted);">Outros</span><span class="val" id="s-out">$0,00</span><span class="sub" id="s-out-q">0 registros</span></div>
+    <div class="strip-item"><span class="lbl" style="color:var(--amber);">Pendente</span><span class="val" id="s-pend" style="color:var(--amber);">$0,00</span><span class="sub" id="s-pend-q">a sacar</span></div>
+    <div class="strip-item" style="border-left:2px solid var(--accent);padding-left:20px;">
+      <span class="lbl" style="color:var(--accent);font-size:11px;letter-spacing:0.1em;">Receita total</span>
+      <span class="val" id="s-receita-total" style="color:var(--accent);font-size:20px;font-weight:600;">$0,00</span>
+      <span class="sub" id="s-receita-brl" style="color:var(--muted);">R$ 0,00</span>
+      <span id="s-br" style="display:none;"></span>
+    </div>
+  </div>
+</div>
+
+<main>
+
+  <div class="section active" id="tab-dashboard">
+    <div class="section-header"><div><h2>Dashboard</h2><p id="dash-periodo">Visão geral do seu bankroll</p></div></div>
+    <div class="metrics" id="dash-metrics"></div>
+    <div class="card">
+      <div class="card-title">Evolução das receitas</div>
+      <div id="chart-legend" style="display:flex;gap:20px;margin-bottom:12px;flex-wrap:wrap;"></div>
+      <div class="chart-wrap">
+        <canvas id="chart" role="img" aria-label="Evolução das receitas">Evolução das receitas ao longo do tempo.</canvas>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">Saldo atual por site</div><div class="sites-grid" id="dash-sites"></div></div>
+  </div>
+
+  <div class="section" id="tab-sessoes">
+    <div class="section-header">
+      <div><h2>Sessões</h2><p id="sess-count">—</p></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" onclick="openSessaoModal('Movimentação')">+ Movimentação</button>
+        <button class="btn btn-primary btn-sm" onclick="openSessaoModal('Grind')">+ Novo Grind</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;">
+      <div class="filter-bar">
+        <select id="sess-filter-tipo" onchange="renderSessoes()">
+          <option value="">Todos os tipos</option>
+          <option value="Grind">Grind</option>
+          <option value="Movimentação">Movimentação</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Tipo</th><th>Buy-in</th><th>MTT</th><th>Prem.</th><th>ITM%</th><th>Premiação</th><th>Líquido</th><th>ROI%</th><th>Bankroll</th><th>Saque Pend.</th><th></th></tr></thead>
+          <tbody id="sess-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="tab-movimentacao">
+    <div class="section-header">
+      <div><h2>Movimentação</h2><p id="mov-count">Controle de entradas e saques</p></div>
+      <button class="btn btn-primary btn-sm" onclick="openMovModal()">+ Nova movimentação</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:0.5px solid var(--border);"><span class="card-title" style="margin:0;">Resumo por categoria</span></div>
+        <table style="width:100%;font-size:13px;"><tbody id="mov-resumo-body"></tbody><tfoot id="mov-resumo-foot"></tfoot></table>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+        <div class="card">
+          <div class="card-title">Total Pendente (atual)</div>
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <span id="mov-pend-val" style="font-family:var(--mono);font-size:26px;font-weight:500;color:var(--amber);">$0,00</span>
+            <span id="mov-pend-qtd" style="font-size:12px;color:var(--muted);"></span>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:4px;">Dinheiro da PF ainda nos caixas do jogador.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Total Sacado (histórico)</div>
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <span id="mov-rec-val" style="font-family:var(--mono);font-size:26px;font-weight:500;color:var(--accent);">$0,00</span>
+            <span id="mov-rec-qtd" style="font-size:12px;color:var(--muted);"></span>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:4px;">Total já transferido para PF.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;">
+      <div class="filter-bar">
+        <div style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);padding:5px 10px;">
+          <span style="font-size:11px;color:var(--muted);">De</span>
+          <input type="date" id="mov-from" onchange="renderMov()" style="background:transparent;border:none;padding:0;outline:none;" />
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);padding:5px 10px;">
+          <span style="font-size:11px;color:var(--muted);">Até</span>
+          <input type="date" id="mov-to" onchange="renderMov()" style="background:transparent;border:none;padding:0;outline:none;" />
+        </div>
+        <button class="btn btn-sm" onclick="limparFiltroMov()" style="color:var(--muted);">Limpar</button>
+        <div style="width:1px;height:20px;background:var(--border2);margin:0 4px;"></div>
+        <select id="mov-filter-tipo" onchange="renderMov()">
+          <option value="">Todos os tipos</option>
+          <option value="Saque Pendente">Saque Pendente</option>
+          <option value="Dividendo">Dividendo</option>
+          <option value="Jogador">Jogador</option>
+          <option value="Salário">Salário</option>
+          <option value="Outro">Outro</option>
+          <option value="Saldo Inicial">Saldo Inicial</option>
+        </select>
+        <span id="mov-periodo-label" style="font-size:11px;color:var(--accent);margin-left:4px;"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Valor</th><th>Tipo</th><th>Local</th><th>Forma</th><th>Saldo Pendente</th><th></th></tr></thead>
+          <tbody id="mov-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- RESUMO ANUAL -->
+  <div class="section" id="tab-resumo">
+    <div class="section-header">
+      <div><h2>Resumo Anual</h2><p id="resumo-ano">Visão consolidada por mês</p></div>
+    </div>
+
+    <!-- Cards de totais -->
+    <div id="resumo-totais" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:1.5rem;"></div>
+
+    <!-- Tabela estilizada -->
+    <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+      <table id="resumo-table" style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--bg3);">
+            <th style="padding:16px 24px;text-align:left;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">Mês</th>
+            <th style="padding:16px 20px;text-align:right;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">Torneios</th>
+            <th style="padding:16px 20px;text-align:right;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">ITM %</th>
+            <th style="padding:16px 20px;text-align:right;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">ROI médio</th>
+            <th style="padding:16px 20px;text-align:right;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">AVG Buy-in</th>
+            <th style="padding:16px 20px;text-align:right;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">Lucro médio</th>
+            <th style="padding:16px 24px;text-align:right;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">Total líquido</th>
+          </tr>
+        </thead>
+        <tbody id="resumo-body"></tbody>
+        <tfoot id="resumo-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- FIELDS -->
+  <div class="section" id="tab-fields">
+    <div class="section-header">
+      <div><h2>Fields</h2><p id="fields-sub">Distribuição por tamanho de field por sessão</p></div>
+      <button class="btn btn-primary btn-sm" onclick="openFieldModal()">+ Registrar sessão</button>
+    </div>
+
+    <!-- Resumo mensal -->
+    <div id="fields-resumo" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.25rem;margin-bottom:1.5rem;"></div>
+
+    <!-- Tabela de registros -->
+    <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--bg3);">
+            <th style="padding:14px 20px;text-align:left;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">Data</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#a78bfa;border-bottom:0.5px solid var(--border);">SG %</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#3b82f6;border-bottom:0.5px solid var(--border);">G %</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#5b8df5;border-bottom:0.5px solid var(--border);background:rgba(91,141,245,0.06);">🔵 Grande</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#00d9a0;border-bottom:0.5px solid var(--border);">M %</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#f59e0b;border-bottom:0.5px solid var(--border);">P %</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#f05252;border-bottom:0.5px solid var(--border);">SP %</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:#f87171;border-bottom:0.5px solid var(--border);background:rgba(248,113,113,0.06);">🔴 Curto</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);border-bottom:0.5px solid var(--border);">Total</th>
+            <th style="padding:14px 20px;border-bottom:0.5px solid var(--border);"></th>
+          </tr>
+        </thead>
+        <tbody id="fields-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<div class="modal-overlay" id="modal-sessao">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+      <div><h3 id="sess-modal-title">Nova sessão</h3><p id="sess-modal-sub" style="font-size:12px;color:var(--muted);"></p></div>
+      <button class="btn btn-sm" onclick="closeSessaoModal()">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Data</label><input type="date" id="se-data" oninput="updateSessaoPreview()" /></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="se-tipo" onchange="toggleGrindFields()">
+          <option value="Grind">Grind (sessão de jogo)</option>
+          <option value="Movimentação">Movimentação (ajuste de caixa)</option>
+        </select>
+      </div>
+      <div class="form-group" id="g-buyin-wrap"><label>Buy-in total ($)</label><input type="number" id="se-buyin" step="0.01" min="0" placeholder="Investimento total" oninput="updateSessaoPreview()" /></div>
+      <div class="form-group" id="g-mtt-wrap"><label>Nº de MTTs</label><input type="number" id="se-mtt" min="0" placeholder="Torneios jogados" oninput="updateSessaoPreview()" /></div>
+      <div class="form-group" id="g-prem-wrap"><label>Nº premiados (ITM)</label><input type="number" id="se-premiados" min="0" placeholder="Torneios premiados" oninput="updateSessaoPreview()" /></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Observação</label><input type="text" id="se-obs" placeholder="Sunday special..." /></div>
+    </div>
+
+    <p class="form-section-title">Saldo por site ($)</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px;">Em branco = mantém o último saldo conhecido.</p>
+    <div class="sites-form-grid" id="se-sites-inputs"></div>
+
+    <div class="preview-box">
+      <div class="preview-row"><span class="k">Bankroll anterior</span><span class="v" id="pv-br-prev">—</span></div>
+      <div class="preview-row"><span class="k">Bankroll atual</span><span class="v" id="pv-br-now" style="color:var(--accent);">—</span></div>
+      <div class="preview-row" id="pv-prem-wrap"><span class="k">Premiação (calc.)</span><span class="v" id="pv-prem">—</span></div>
+      <div class="preview-row" id="pv-liq-wrap"><span class="k">Líquido (calc.)</span><span class="v" id="pv-liq">—</span></div>
+      <div class="preview-row" id="pv-roi-wrap"><span class="k">ROI · ITM</span><span class="v" id="pv-roi">—</span></div>
+      <div class="preview-row"><span class="k">Saque Pendente (nesta data)</span><span class="v" id="pv-pend" style="color:var(--amber);">—</span></div>
+    </div>
+
+    <div style="margin-top:0.75rem;">
+      <div class="form-group">
+        <label>Ajuste manual do Saque Pendente ($) <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;">(opcional — deixe em branco para usar o valor calculado)</span></label>
+        <input type="number" id="se-pend-manual" step="0.01" min="0" placeholder="Calculado automaticamente..." oninput="updateSessaoPreview()" />
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" id="se-del-btn" style="display:none;" onclick="deletarSessao()">Excluir</button>
+      <button class="btn btn-sm" onclick="closeSessaoModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="salvarSessao()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-mov" onclick="if(event.target===this)closeMovModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+      <div><h3 id="mov-modal-title">Nova movimentação</h3><p id="mov-modal-sub" style="font-size:12px;color:var(--muted);"></p></div>
+      <button class="btn btn-sm" onclick="closeMovModal()">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Data</label><input type="date" id="mv-data" /></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="mv-tipo" onchange="updateMovFields()">
+          <option value="Saque Pendente">Saque Pendente (retirada PF)</option>
+          <option value="Dividendo">Dividendo (time)</option>
+          <option value="Jogador">Jogador</option>
+          <option value="Salário">Salário</option>
+          <option value="Outro">Outro</option>
+          <option value="Saldo Inicial">Saldo Inicial</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Valor ($)</label><input type="number" id="mv-valor" step="0.01" oninput="updateMovFields()" /></div>
+      <div class="form-group"><label id="mv-site-label">Site</label>
+        <select id="mv-site" onchange="updateMovFields()"><option value="">— Selecione —</option></select>
+      </div>
+
+      <div class="form-group"><label>Forma</label>
+        <input type="text" id="mv-forma" list="mv-forma-list" placeholder="Pix, Crypto..." />
+        <datalist id="mv-forma-list">
+          <option value="Pix"><option value="Crypto"><option value="GG-Pix"><option value="Rake GG+Coin">
+        </datalist>
+      </div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Observação</label><input type="text" id="mv-obs" /></div>
+    </div>
+
+    <div class="preview-box">
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;">O sistema vai fazer automaticamente:</p>
+      <div id="mv-auto-info" style="font-size:12px;line-height:1.8;"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" id="mv-del-btn" style="display:none;" onclick="deletarMov()">Excluir</button>
+      <button class="btn btn-sm" onclick="closeMovModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="salvarMov()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-sess-det" onclick="if(event.target===this)document.getElementById('modal-sess-det').classList.remove('show')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div><h3 id="sd-title">Detalhes</h3><p id="sd-sub" style="font-size:12px;color:var(--muted);"></p></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" id="sd-edit-btn">Editar</button>
+        <button class="btn btn-sm" onclick="document.getElementById('modal-sess-det').classList.remove('show')">✕</button>
+      </div>
+    </div>
+    <div id="sd-content"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-import">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <h3>Importar / Exportar dados</h3>
+      <button class="btn btn-sm" onclick="document.getElementById('modal-import').classList.remove('show')">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:1rem;">Cole um JSON válido para importar, ou copie o JSON atual para fazer backup. <b style="color:var(--amber);">Importar substitui todos os dados.</b></p>
+    <div class="form-group">
+      <label>JSON</label>
+      <textarea id="import-area" style="font-family:var(--mono);font-size:11px;min-height:300px;padding:10px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);resize:vertical;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="exportData()">Exportar (copiar atual)</button>
+      <button class="btn btn-danger btn-sm" onclick="limparTudo()">Apagar tudo</button>
+      <button class="btn btn-primary btn-sm" onclick="importData()">Importar JSON</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-field">
+  <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+      <div><h3 id="field-modal-title">Registrar field da sessão</h3><p id="field-modal-sub" style="font-size:12px;color:var(--muted);"></p></div>
+      <button class="btn btn-sm" onclick="closeFieldModal()">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Data</label><input type="date" id="fld-data" /></div>
+      <div class="form-group"><label>Obs (opcional)</label><input type="text" id="fld-obs" placeholder="Ex: domingo especial..." /></div>
+    </div>
+    <p class="form-section-title">% por tamanho de field</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+      <div class="form-group">
+        <label style="color:#a78bfa;">SG — Super Grande (%)</label>
+        <input type="number" id="fld-sg" step="0.01" min="0" max="100" placeholder="0.00" oninput="updateFieldTotal()" />
+      </div>
+      <div class="form-group">
+        <label style="color:#3b82f6;">G — Grande (%)</label>
+        <input type="number" id="fld-g" step="0.01" min="0" max="100" placeholder="0.00" oninput="updateFieldTotal()" />
+      </div>
+      <div class="form-group">
+        <label style="color:#00d9a0;">M — Médio (%)</label>
+        <input type="number" id="fld-m" step="0.01" min="0" max="100" placeholder="0.00" oninput="updateFieldTotal()" />
+      </div>
+      <div class="form-group">
+        <label style="color:#f59e0b;">P — Pequeno (%)</label>
+        <input type="number" id="fld-p" step="0.01" min="0" max="100" placeholder="0.00" oninput="updateFieldTotal()" />
+      </div>
+      <div class="form-group">
+        <label style="color:#f05252;">SP — Super Pequeno (%)</label>
+        <input type="number" id="fld-sp" step="0.01" min="0" max="100" placeholder="0.00" oninput="updateFieldTotal()" />
+      </div>
+      <div class="form-group">
+        <label style="color:var(--muted);">Total</label>
+        <input type="text" id="fld-total" readonly style="background:var(--bg);color:var(--muted);font-family:var(--mono);" />
+      </div>
+    </div>
+    <div id="fld-aviso" style="font-size:12px;color:var(--amber);margin-bottom:8px;display:none;">⚠ Total diferente de 100%</div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" id="fld-del-btn" style="display:none;" onclick="deletarField()">Excluir</button>
+      <button class="btn btn-sm" onclick="closeFieldModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="salvarField()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(10,12,18,0.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <span style="color:var(--muted);font-size:14px;">Carregando dados...</span>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SITES = ['PS','888','PokerStars.es','CoinPoker','Tiger','Bodog','WPT','WPN','GG','Ipoker','PP','Binance','Ecopazy','Luxon','AstroPay'];
+
+// ============ SUPABASE CONFIG ============
+const SUPA_URL = 'https://euqhubiiypwniaogymvp.supabase.co';
+const SUPA_KEY = 'sb_publishable_u9sME3y5H6wdAl5y4BEGZQ_RAjHtudR';
+
+async function supaFetch(table, method='GET', body=null, query='') {
+  const headers = {
+    'apikey': SUPA_KEY,
+    'Authorization': 'Bearer ' + SUPA_KEY,
+    'Content-Type': 'application/json',
+  };
+  if (method === 'POST') headers['Prefer'] = 'resolution=merge-duplicates,return=minimal';
+  if (method === 'DELETE') headers['Prefer'] = 'return=minimal';
+
+  const res = await fetch(`${SUPA_URL}/rest/v1/${table}${query}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('Supabase error:', method, table, query, err);
+    return null;
+  }
+  if (method === 'GET') return res.json();
+  return true;
+}
+
+// Carregar dados do Supabase
+async function loadAllData() {
+  showLoading(true);
+  try {
+    // Timeout de 10 segundos para não ficar preso
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000));
+    const load = Promise.all([
+      supaFetch('sessoes', 'GET', null, '?order=data.asc&limit=10000'),
+      supaFetch('movs',    'GET', null, '?order=data.asc,id.asc&limit=10000'),
+      supaFetch('fields',  'GET', null, '?order=data.asc&limit=10000'),
+    ]);
+    const [s, m, f] = await Promise.race([load, timeout]);
+    sessoes = (s||[]).map(r => ({ _id:r.id, data:r.data, tipo:r.tipo, buyin:r.buyin, mtt:r.mtt, premiados:r.premiados, obs:r.obs, sites:r.sites||{}, fixedStats:r.fixed_stats, pendManual:r.pend_manual }));
+    movs    = (m||[]).map(r => ({ _id:r.id, data:r.data, tipo:r.tipo, valor:r.valor, site:r.site, forma:r.forma, obs:r.obs }));
+    fields  = (f||[]).map(r => ({ _id:r.id, data:r.data, sg:r.sg, g:r.g, m:r.m, p:r.p, sp:r.sp, obs:r.obs }));
+  } catch(e) {
+    console.error('Erro ao carregar:', e);
+    toast('Erro ao conectar com o banco. Verifique a conexão.', true);
+  }
+  showLoading(false);
+  refreshAll();
+}
+
+function showLoading(show) {
+  let el = document.getElementById('loading-overlay');
+  if (!el) return;
+  el.style.display = show ? 'flex' : 'none';
+}
+
+let sessoes = [];
+let movs    = [];
+let chartInst = null;
+let editSessIdx = null;
+let editMovIdx = null;
+
+async function saveSessoes() {
+  const rows = sessoes.map(s => ({
+    id: s._id, data: s.data, tipo: s.tipo, buyin: s.buyin||0,
+    mtt: s.mtt||0, premiados: s.premiados||0, obs: s.obs||'',
+    sites: s.sites||{}, fixed_stats: s.fixedStats||null, pend_manual: s.pendManual||null
+  }));
+  await supaFetch('sessoes', 'POST', rows);
+}
+
+async function saveMovs() {
+  const rows = movs.map(m => ({
+    id: m._id, data: m.data, tipo: m.tipo, valor: m.valor,
+    site: m.site||'', forma: m.forma||'', obs: m.obs||''
+  }));
+  await supaFetch('movs', 'POST', rows);
+}
+
+function fmt(v) {
+  if (v === null || v === undefined || isNaN(v)) return '-';
+  const n = parseFloat(v);
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function fmtPct(v) { return (parseFloat(v)||0).toFixed(2) + '%'; }
+function todayISO() { return new Date().toISOString().split('T')[0]; }
+
+function toast(msg, danger) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('danger', !!danger);
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function getSaldosBefore(targetDate, excludeId) {
+  const sorted = [...sessoes].filter(s => s._id !== excludeId).sort((a,b) => a.data.localeCompare(b.data) || a._id - b._id);
+  const saldos = {};
+  SITES.forEach(s => saldos[s] = 0);
+  for (const s of sorted) {
+    if (s.data <= targetDate) {
+      SITES.forEach(site => {
+        if (s.sites && s.sites[site] !== undefined && s.sites[site] !== null && s.sites[site] !== '') {
+          saldos[site] = parseFloat(s.sites[site]) || 0;
+        }
+      });
+    }
+  }
+  return saldos;
+}
+
+function getLastSites() {
+  return getSaldosBefore('9999-99-99', null);
+}
+
+function getSaldosAfterSessao(s) {
+  const sorted = [...sessoes].sort((a,b) => a.data.localeCompare(b.data) || a._id - b._id);
+  const saldos = {};
+  SITES.forEach(st => saldos[st] = 0);
+  for (const ss of sorted) {
+    if (ss.data < s.data || (ss.data === s.data && ss._id <= s._id)) {
+      SITES.forEach(site => {
+        if (ss.sites && ss.sites[site] !== undefined && ss.sites[site] !== null && ss.sites[site] !== '') {
+          saldos[site] = parseFloat(ss.sites[site]) || 0;
+        }
+      });
+    }
+  }
+  return saldos;
+}
+
+function sumSites(saldos) {
+  return SITES.reduce((a, s) => a + (parseFloat(saldos[s])||0), 0);
+}
+
+function totalPendente() {
+  return movs.reduce((a, m) => {
+const v = parseFloat(m.valor||0);
+    if (m.tipo === 'Saque Pendente') return a - v;
+    return a + v;
+  }, 0);
+}
+
+function pendenteNaData(data) {
+  return movs.filter(m => m.data <= data).reduce((a, m) => {
+const v = parseFloat(m.valor||0);
+    if (m.tipo === 'Saque Pendente') return a - v;
+    return a + v;
+  }, 0);
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.nav-tab').forEach((el, i) => {
+    el.classList.toggle('active', ['dashboard','sessoes','movimentacao','resumo','fields'][i] === t);
+  });
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + t).classList.add('active');
+  if (t === 'dashboard')    renderDashboard();
+  if (t === 'sessoes')      renderSessoes();
+  if (t === 'movimentacao') renderMov();
+  if (t === 'resumo')       renderResumo();
+  if (t === 'fields')       renderFields();
+}
+
+function renderStrip() {
+  const tDiv = movs.filter(m=>m.tipo==='Dividendo').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tJog = movs.filter(m=>m.tipo==='Jogador').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tSal = movs.filter(m=>m.tipo==='Salário').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tOut = movs.filter(m=>m.tipo==='Outro').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tPend = totalPendente();
+
+  document.getElementById('s-div').textContent = fmt(tDiv);
+  document.getElementById('s-jog').textContent = fmt(tJog);
+  document.getElementById('s-sal').textContent = fmt(tSal);
+  document.getElementById('s-out').textContent = fmt(tOut);
+  document.getElementById('s-pend').textContent = fmt(tPend);
+  document.getElementById('s-div-q').textContent = movs.filter(m=>m.tipo==='Dividendo').length + ' registros';
+  document.getElementById('s-jog-q').textContent = movs.filter(m=>m.tipo==='Jogador').length + ' registros';
+  document.getElementById('s-sal-q').textContent = movs.filter(m=>m.tipo==='Salário').length + ' registros';
+  document.getElementById('s-out-q').textContent = movs.filter(m=>m.tipo==='Outro').length + ' registros';
+  document.getElementById('s-pend-q').textContent = movs.filter(m=>m.tipo==='Saque Pendente'&&m.status==='pendente').length + ' saque(s)';
+
+  const brBruto = sumSites(getLastSites());
+  const brLivre = brBruto - tPend;
+  const sBr = document.getElementById('s-br');
+  sBr.textContent = fmt(brLivre);
+  sBr.style.color = brLivre >= 0 ? 'var(--accent)' : 'var(--red)';
+  const receitaTotalVal = tDiv + tJog + tSal + tOut;
+  const elRT = document.getElementById('s-receita-total');
+  const elBRL = document.getElementById('s-receita-brl');
+  if (elRT) elRT.textContent = fmt(receitaTotalVal);
+  if (elBRL) elBRL.textContent = 'R$ ' + (receitaTotalVal * 5).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function computeSessoes() {
+  const sorted = [...sessoes].sort((a,b) => a.data.localeCompare(b.data) || a._id - b._id);
+  const result = [];
+  let prevBrReal = 0;
+  for (const s of sorted) {
+    const saldos = getSaldosAfterSessao(s);
+    const brBruto = sumSites(saldos);
+    const pendNa = pendenteNaData(s.data);
+    const brReal = brBruto - pendNa;
+    const buyin = parseFloat(s.buyin)||0;
+    const mtt = parseInt(s.mtt)||0;
+    const prem = parseInt(s.premiados)||0;
+    let liquido = 0, premiacao = 0, roi = 0, itm = 0, avgBuyin = 0, lucroMed = 0;
+    if (s.tipo === 'Grind') {
+      if (s.fixedStats) {
+        // Usar valores fixos passados pelo usuário (sessões consolidadas)
+        liquido   = s.fixedStats.liquido  || 0;
+        roi       = s.fixedStats.roi      || 0;
+        itm       = s.fixedStats.itm      || 0;
+        lucroMed  = s.fixedStats.lucroMed || 0;
+        avgBuyin  = mtt > 0 ? buyin / mtt : 0;
+        premiacao = liquido + buyin;
+      } else {
+        liquido   = brReal - prevBrReal;
+        premiacao = liquido + buyin;
+        roi       = buyin > 0 ? (liquido / buyin) * 100 : 0;
+        itm       = mtt > 0 ? (prem / mtt) * 100 : 0;
+        avgBuyin  = mtt > 0 ? buyin / mtt : 0;
+        lucroMed  = mtt > 0 ? liquido / mtt : 0;
+      }
+    }
+    result.push({ ...s, buyin, mtt, prem, brBruto, brReal, liquido, premiacao, roi, itm, avgBuyin, lucroMed });
+    prevBrReal = brReal;
+  }
+  return result;
+}
+
+function renderDashboard() {
+  const computed = computeSessoes();
+  const grid = document.getElementById('dash-metrics');
+
+  if (!computed.length) {
+    grid.innerHTML = '<p class="empty">Nenhuma sessão. <a onclick="openSessaoModal(\'Grind\')">Registre seu primeiro grind.</a></p>';
+    renderChart([]);
+    document.getElementById('dash-sites').innerHTML = '<p class="empty">Sem dados.</p>';
+    return;
+  }
+
+  const grind = computed.filter(s => s.tipo === 'Grind');
+  const totalLiq   = grind.reduce((a,s) => a + s.liquido, 0);
+  const totalBuyin = grind.reduce((a,s) => a + s.buyin, 0);
+  const totalMtt   = grind.reduce((a,s) => a + s.mtt, 0);
+  const totalPrem  = grind.reduce((a,s) => a + s.prem, 0);
+  // ROI médio ponderado: soma(liquido) / soma(buyin)
+  const avgROI = totalBuyin > 0 ? (totalLiq / totalBuyin) * 100 : 0;
+  // ITM médio ponderado: soma(premiados) / soma(mtt)
+  const avgITM = totalMtt > 0 ? (totalPrem / totalMtt) * 100 : 0;
+  // Lucro médio por torneio: soma(liquido) / soma(mtt)
+  const avgBI  = totalMtt > 0 ? totalBuyin / totalMtt : 0;
+  const last = computed[computed.length-1];
+  const tPend = totalPendente();
+
+  const lucroMedTotal = totalMtt > 0 ? totalLiq / totalMtt : 0;
+
+  // Para ITM: usar premiados reais se disponíveis, senão calcular do fixedStats
+  const totalPremFixed = grind.reduce((a,s) => {
+    if (s.fixedStats && s.fixedStats.itm) return a + Math.round(s.mtt * s.fixedStats.itm / 100);
+    return a + s.prem;
+  }, 0);
+  const avgITMFixed = totalMtt > 0 ? (totalPremFixed / totalMtt) * 100 : 0;
+
+  // Para ROI: usar fixedStats quando disponível (média ponderada por buy-in)
+  const avgROIFixed = totalBuyin > 0 ? (totalLiq / totalBuyin) * 100 : 0;
+
+  // Para Lucro Médio: usar fixedStats quando disponível (média ponderada por MTT)
+  const lucroMedFixed = totalMtt > 0 ? totalLiq / totalMtt : 0;
+
+  document.getElementById('dash-periodo').textContent = computed[0].data + ' → ' + last.data + ' · ' + grind.length + ' grinds · ' + totalMtt.toLocaleString('pt-BR') + ' torneios';
+
+  const sepStyle = 'grid-column:1/-1;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);padding-bottom:6px;border-bottom:0.5px solid var(--border);margin-bottom:2px;margin-top:6px;';
+
+  // Lucro líquido = soma das entradas tipo "Jogador" na aba Movimentação
+  const totalJogador = movs.filter(m => m.tipo === 'Jogador').reduce((a,m) => a + parseFloat(m.valor||0), 0);
+
+  const statsJogador = [
+    { lbl: 'Torneios jogados', val: totalMtt.toLocaleString('pt-BR'), cls: '', sub: grind.length + ' sessões de grind' },
+    { lbl: 'ITM %', val: fmtPct(avgITMFixed), cls: '', sub: totalPremFixed + ' de ' + totalMtt + ' premiados' },
+    { lbl: 'ROI médio', val: fmtPct(avgROIFixed), cls: avgROIFixed>=0?'pos':'neg', sub: 'líq. / total investido (ponderado)' },
+    { lbl: 'Lucro médio', val: fmt(lucroMedFixed), cls: lucroMedFixed>=0?'pos':'neg', sub: 'por torneio' },
+    { lbl: 'Buy-in médio', val: fmt(avgBI), cls: '', sub: 'por torneio' },
+    { lbl: 'Lucro líquido', val: fmt(totalJogador), cls: totalJogador>=0?'pos':'neg', sub: 'receita do jogador (movimentação)' },
+  ];
+
+  const statsFinanceiro = [
+    { lbl: 'Bankroll livre', val: fmt(last.brReal), cls: last.brReal>=0?'pos':'neg', sub: fmt(last.brBruto)+' bruto − '+fmt(tPend)+' pend.' },
+    { lbl: 'Total investido', val: fmt(totalBuyin), cls: '', sub: 'em buy-ins no período' },
+  ];
+
+  grid.innerHTML =
+    `<div style="${sepStyle}">Stats do jogador — all data</div>` +
+    statsJogador.map(m => `<div class="metric"><div class="lbl">${m.lbl}</div><div class="val ${m.cls}">${m.val}</div><div class="sub">${m.sub}</div></div>`).join('') +
+    `<div style="${sepStyle}margin-top:16px;">Financeiro</div>` +
+    statsFinanceiro.map(m => `<div class="metric"><div class="lbl">${m.lbl}</div><div class="val ${m.cls}">${m.val}</div><div class="sub">${m.sub}</div></div>`).join('');
+
+  renderChart(computed);
+
+  const last_saldos = getLastSites();
+  document.getElementById('dash-sites').innerHTML = SITES.map(s => {
+    const v = last_saldos[s]||0;
+    return `<div class="site-item"><div class="sname">${s}</div><div class="sval" style="color:${v>0?'var(--accent)':'var(--muted)'};">${fmt(v)}</div></div>`;
+  }).join('');
+}
+
+function renderChart(computed) {
+  const canvas = document.getElementById('chart');
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+  const movsSort = [...movs].sort((a,b) => a.data.localeCompare(b.data) || a._id - b._id);
+
+  function acumAteData(dataLimite, tipos) {
+    return movsSort
+      .filter(m => m.data <= dataLimite && tipos.includes(m.tipo))
+      .reduce((a,m) => a + parseFloat(m.valor||0), 0);
+  }
+
+  // 12 meses do ano atual
+  const ano = new Date().getFullYear();
+  const mesesLabels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesesDatas  = Array.from({length:12}, (_,i) => {
+    const m = String(i+1).padStart(2,'0');
+    const lastDay = new Date(ano, i+1, 0).getDate();
+    return `${ano}-${m}-${lastDay}`;
+  });
+
+  const hoje = new Date().toISOString().split('T')[0];
+
+  const dataJogador  = mesesDatas.map(d => d <= hoje ? acumAteData(d, ['Jogador']) : null);
+  const dataRecTotal = mesesDatas.map(d => d <= hoje ? acumAteData(d, ['Jogador','Dividendo','Salário','Outro']) : null);
+
+  // Legenda customizada
+  const legendEl = document.getElementById('chart-legend');
+  if (legendEl) {
+    legendEl.innerHTML = `
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+        <span style="width:24px;height:2px;background:#3b82f6;display:inline-block;border-radius:2px;"></span>
+        Lucro acumulado do jogador
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+        <span style="width:24px;height:2px;background:#a78bfa;display:inline-block;border-radius:2px;"></span>
+        Receita total acumulada
+      </span>`;
+  }
+
+  chartInst = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: mesesLabels,
+      datasets: [
+        {
+          label: 'Lucro acumulado (Jogador)',
+          data: dataJogador,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,0.06)',
+          borderWidth: 2, pointRadius: 4, fill: true, tension: 0.3,
+          spanGaps: false
+        },
+        {
+          label: 'Receita total acumulada',
+          data: dataRecTotal,
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167,139,250,0.06)',
+          borderWidth: 2, pointRadius: 4, fill: true, tension: 0.3,
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.raw !== null ? ctx.dataset.label + ': ' + fmt(ctx.raw) : 'Não registrado' } }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#6b7280', font: { size: 11 } },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          min: 0,
+          position: 'left',
+          ticks: { stepSize: 5000, color: '#6b7280', font: { size: 10, family: 'DM Mono' }, callback: v => '$'+v.toLocaleString('pt-BR') },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        }
+      }
+    }
+  });
+}
+
+function renderSessoes() {
+  const computed = computeSessoes();
+  const tbody = document.getElementById('sess-body');
+  const count = document.getElementById('sess-count');
+  const f = document.getElementById('sess-filter-tipo')?.value || '';
+  const list = (f ? computed.filter(s => s.tipo === f) : computed).reverse();
+  count.textContent = computed.length + ' sessão(ões) · ' + computed.filter(s=>s.tipo==='Grind').length + ' grinds · ' + computed.filter(s=>s.tipo==='Movimentação').length + ' movs';
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">Nenhuma sessão.</td></tr>'; return; }
+
+  // Calcular pendente acumulado por data (cronológico) para exibir na coluna
+  const movsChron = [...movs].sort((a,b) => a.data.localeCompare(b.data) || a._id - b._id);
+  const pendByDate = {};
+  let acumPend = 0;
+  movsChron.forEach(m => {
+    const v = parseFloat(m.valor||0);
+    if (m.tipo === 'Saque Pendente') acumPend -= v;
+    else acumPend += v;
+    pendByDate[m.data] = acumPend;
+  });
+
+  // Para cada sessão, pegar o pendente acumulado até aquela data
+  function getPendNaData(data) {
+    let pend = 0;
+    movsChron.forEach(m => {
+      if (m.data <= data) {
+        const v = parseFloat(m.valor||0);
+        if (m.tipo === 'Saque Pendente') pend -= v;
+        else pend += v;
+      }
+    });
+    return Math.max(0, pend);
+  }
+
+  tbody.innerHTML = list.map(s => {
+    const isG = s.tipo === 'Grind';
+    const pendNaData = getPendNaData(s.data);
+    return `<tr data-sid="${s._id}" style="cursor:pointer;">
+      <td class="sans">${s.data}</td>
+      <td><span class="badge ${isG?'b-grind':'b-mov'}">${s.tipo}</span></td>
+      <td>${isG?fmt(s.buyin):'—'}</td>
+      <td>${isG?(s.mtt||'—'):'—'}</td>
+      <td>${isG?(s.prem||'—'):'—'}</td>
+      <td>${isG?fmtPct(s.itm):'—'}</td>
+      <td>${isG?fmt(s.premiacao):'—'}</td>
+      <td style="color:${isG?(s.liquido>=0?'var(--accent)':'var(--red)'):'var(--muted)'};">${isG?fmt(s.liquido):'—'}</td>
+      <td>${isG?`<span class="badge ${s.roi>=0?'b-pos':'b-neg'}">${fmtPct(s.roi)}</span>${s.fixedStats?'<span style="font-size:9px;color:var(--muted);margin-left:3px;">fixo</span>':''}`:'—'}</td>
+      <td>${fmt(s.brReal)}</td>
+      <td style="color:var(--amber);font-family:var(--mono);font-size:12px;">${s.pendManual !== null && s.pendManual !== undefined ? fmt(s.pendManual) : fmt(pendNaData)}</td>
+      <td><div style="display:flex;gap:4px;"><button type="button" class="btn btn-sm sess-edit-btn" data-sid="${s._id}" style="font-size:10px;padding:3px 8px;">editar</button><button type="button" class="btn btn-danger btn-sm sess-del-btn" data-sid="${s._id}" style="font-size:10px;padding:3px 8px;">excluir</button></div></td>
+    </tr>`;
+  }).join('');
+
+  // Event delegation para os botões e linhas
+  tbody.querySelectorAll('.sess-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSessaoEdit(btn.dataset.sid);
+    });
+  });
+  tbody.querySelectorAll('.sess-del-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deletarSessaoById(btn.dataset.sid);
+    });
+  });
+  tbody.querySelectorAll('tr[data-sid]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      openSessaoDetail(tr.dataset.sid);
+    });
+  });
+}
+
+function openSessaoModal(tipo) {
+  editSessIdx = null;
+  document.getElementById('sess-modal-title').textContent = tipo === 'Grind' ? 'Novo grind' : 'Nova movimentação (ajuste de caixa)';
+  document.getElementById('sess-modal-sub').textContent = tipo === 'Grind' ? 'Sessão de jogo' : 'Atualização de saldos sem jogo';
+  document.getElementById('se-del-btn').style.display = 'none';
+  document.getElementById('se-data').value = todayISO();
+  document.getElementById('se-tipo').value = tipo;
+  ['se-buyin','se-mtt','se-premiados','se-obs','se-pend-manual'].forEach(id => document.getElementById(id).value = '');
+  buildSiteInputs({});
+  toggleGrindFields();
+  updateSessaoPreview();
+  document.getElementById('modal-sessao').classList.add('show');
+}
+
+function openSessaoEdit(id) {
+  document.getElementById('modal-sess-det').classList.remove('show');
+  const idx = sessoes.findIndex(s => s._id == id);
+  if (idx < 0) return;
+  const s = sessoes[idx];
+  editSessIdx = idx;
+  document.getElementById('sess-modal-title').textContent = 'Editar sessão';
+  document.getElementById('sess-modal-sub').textContent = s.data;
+  document.getElementById('se-del-btn').style.display = 'inline-block';
+  document.getElementById('se-data').value = s.data;
+  document.getElementById('se-tipo').value = s.tipo;
+  document.getElementById('se-buyin').value = s.buyin || '';
+  document.getElementById('se-mtt').value = s.mtt || '';
+  document.getElementById('se-premiados').value = s.premiados || '';
+  document.getElementById('se-obs').value = s.obs || '';
+  document.getElementById('se-pend-manual').value = s.pendManual !== null && s.pendManual !== undefined ? s.pendManual : '';
+  buildSiteInputs(s.sites || {});
+  toggleGrindFields();
+  updateSessaoPreview();
+  document.getElementById('modal-sessao').classList.add('show');
+}
+
+function toggleGrindFields() {
+  const showG = document.getElementById('se-tipo').value === 'Grind';
+  ['g-buyin-wrap','g-mtt-wrap','g-prem-wrap'].forEach(id => document.getElementById(id).style.display = showG ? '' : 'none');
+  ['pv-prem-wrap','pv-liq-wrap','pv-roi-wrap'].forEach(id => document.getElementById(id).style.display = showG ? 'flex' : 'none');
+  updateSessaoPreview();
+}
+
+function buildSiteInputs(current) {
+  const div = document.getElementById('se-sites-inputs');
+  const excludeId = editSessIdx !== null ? sessoes[editSessIdx]._id : null;
+  const data = document.getElementById('se-data').value || todayISO();
+  const tipo = document.getElementById('se-tipo').value;
+  const lastSaldos = getSaldosBefore(data, excludeId);
+  div.innerHTML = SITES.map(s => {
+    const placeholder = fmt(lastSaldos[s]||0);
+    // Sempre pré-preenche com último saldo conhecido (Grind e Movimentação)
+    let val = '';
+    if (current && current[s] !== undefined && current[s] !== '' && current[s] !== null) {
+      val = current[s]; // editando — usa valor salvo
+    } else {
+      val = lastSaldos[s] || ''; // nova sessão — pré-preenche sempre
+    }
+    return `<div class="form-group">
+      <label>${s}</label>
+      <input type="number" id="se-site-${s}" value="${val}" step="0.01" placeholder="${placeholder}" oninput="updateSessaoPreview()" />
+      <span class="hint">atual: ${placeholder}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateSessaoPreview() {
+  const data = document.getElementById('se-data').value || todayISO();
+  const tipo = document.getElementById('se-tipo').value;
+  const buyin = parseFloat(document.getElementById('se-buyin').value)||0;
+  const mtt = parseInt(document.getElementById('se-mtt').value)||0;
+  const prem = parseInt(document.getElementById('se-premiados').value)||0;
+  const excludeId = editSessIdx !== null ? sessoes[editSessIdx]._id : null;
+
+  const baseSaldos = getSaldosBefore(data, excludeId);
+  const newSaldos = {...baseSaldos};
+  SITES.forEach(s => {
+    const v = document.getElementById('se-site-' + s)?.value;
+    if (v !== '' && v !== undefined && v !== null) newSaldos[s] = parseFloat(v)||0;
+  });
+  const brBrutoNow = sumSites(newSaldos);
+  const pendNa = pendenteNaData(data);
+  const brRealNow = brBrutoNow - pendNa;
+  const brBrutoPrev = sumSites(baseSaldos);
+  const brRealPrev = brBrutoPrev - pendNa;
+
+  document.getElementById('pv-br-prev').textContent = fmt(brRealPrev);
+  document.getElementById('pv-br-now').textContent = fmt(brRealNow);
+
+  if (tipo === 'Grind') {
+    const liquido = brRealNow - brRealPrev;
+    const premiacao = liquido + buyin;
+    const roi = buyin > 0 ? (liquido/buyin)*100 : 0;
+    const itm = mtt > 0 ? (prem/mtt)*100 : 0;
+    document.getElementById('pv-prem').textContent = fmt(premiacao);
+    const liqEl = document.getElementById('pv-liq');
+    liqEl.textContent = fmt(liquido);
+    liqEl.style.color = liquido >= 0 ? 'var(--accent)' : 'var(--red)';
+    document.getElementById('pv-roi').textContent = 'ROI ' + fmtPct(roi) + ' · ITM ' + fmtPct(itm);
+  }
+
+  // Mostrar saque pendente calculado na data
+  const pendEl = document.getElementById('pv-pend');
+  if (pendEl) pendEl.textContent = fmt(pendNa);
+}
+
+async function salvarSessao() {
+  const data = document.getElementById('se-data').value;
+  if (!data) { toast('Informe a data.', true); return; }
+  const tipo = document.getElementById('se-tipo').value;
+  const sites = {};
+  SITES.forEach(s => {
+    const v = document.getElementById('se-site-' + s)?.value;
+    if (v !== '' && v !== undefined && v !== null) sites[s] = parseFloat(v)||0;
+  });
+  const pendManualVal = document.getElementById('se-pend-manual').value;
+  const sess = {
+    _id: editSessIdx !== null ? sessoes[editSessIdx]._id : Date.now(),
+    data, tipo,
+    buyin: tipo === 'Grind' ? (parseFloat(document.getElementById('se-buyin').value)||0) : 0,
+    mtt: tipo === 'Grind' ? (parseInt(document.getElementById('se-mtt').value)||0) : 0,
+    premiados: tipo === 'Grind' ? (parseInt(document.getElementById('se-premiados').value)||0) : 0,
+    obs: document.getElementById('se-obs').value,
+    pendManual: pendManualVal !== '' ? parseFloat(pendManualVal) : null,
+    sites
+  };
+  if (editSessIdx !== null) { sessoes[editSessIdx] = sess; toast('Sessão atualizada!'); }
+  else { sessoes.push(sess); toast('Sessão registrada!'); }
+  saveSessoes();
+  closeSessaoModal();
+  refreshAll();
+}
+
+async function deletarSessao() {
+  if (editSessIdx === null) return;
+  const s = sessoes[editSessIdx];
+
+  // Verifica se é uma sessão criada automaticamente por uma movimentação
+  const linkedMov = movs.find(m => m._linkedSessionId === s._id);
+  if (linkedMov) {
+    const go = confirm('Esta sessão foi criada automaticamente pela movimentação de ' + linkedMov.data + ' (' + linkedMov.tipo + ' ' + fmt(linkedMov.valor) + ').\n\nPara remover, é melhor excluir a movimentação original. Deseja ir para ela agora?');
+    if (go) {
+      const movIdx = movs.findIndex(m => m._id === linkedMov._id);
+      closeSessaoModal();
+      if (movIdx >= 0) {
+        switchTab('movimentacao');
+        setTimeout(() => openMovEdit(movIdx), 150);
+      }
+    }
+    editSessIdx = null;
+    return;
+  }
+
+  if (!confirm('Excluir esta sessão? Esta ação não pode ser desfeita.')) {
+    return;
+  }
+  sessoes.splice(editSessIdx, 1);
+  saveSessoes();
+  closeSessaoModal();
+  refreshAll();
+  toast('Sessão excluída.');
+}
+
+async function deletarSessaoById(id) {
+  const idx = sessoes.findIndex(s => s._id == id);
+  if (idx < 0) { toast('Sessão não encontrada.', true); return; }
+  if (!confirm('Excluir esta sessão? Esta ação não pode ser desfeita.')) return;
+  await supaFetch('sessoes', 'DELETE', null, `?id=eq.${id}`);
+  sessoes.splice(idx, 1);
+  refreshAll();
+  toast('Sessão excluída.');
+}
+
+function closeSessaoModal() {
+  document.getElementById('modal-sessao').classList.remove('show');
+  editSessIdx = null;
+}
+
+function openSessaoDetail(id) {
+  const computed = computeSessoes();
+  const s = computed.find(x => x._id == id);
+  if (!s) return;
+  const isG = s.tipo === 'Grind';
+  document.getElementById('sd-title').textContent = s.tipo + ' — ' + s.data;
+  document.getElementById('sd-sub').textContent = s.obs || '';
+
+  const metrics = isG ? [
+    { lbl: 'Buy-in total', val: fmt(s.buyin), sub: s.mtt+' MTTs' },
+    { lbl: 'AVG buy-in', val: fmt(s.avgBuyin), sub: 'por torneio' },
+    { lbl: 'Premiação', val: fmt(s.premiacao), sub: 'recebida' },
+    { lbl: 'Líquido', val: fmt(s.liquido), sub: 'prem. − buyin', color: s.liquido>=0?'var(--accent)':'var(--red)' },
+    { lbl: 'ROI', val: fmtPct(s.roi), sub: 'líq. / buyin', color: s.roi>=0?'var(--accent)':'var(--red)' },
+    { lbl: 'ITM', val: fmtPct(s.itm), sub: s.prem+'/'+s.mtt+' premiados' },
+    { lbl: 'Lucro médio', val: fmt(s.lucroMed), sub: 'líq. / MTT' },
+    { lbl: 'Bankroll', val: fmt(s.brReal), sub: fmt(s.brBruto)+' bruto' },
+  ] : [
+    { lbl: 'Bankroll atual', val: fmt(s.brReal), sub: fmt(s.brBruto)+' bruto', color: 'var(--accent)' },
+  ];
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:1rem;">';
+  html += metrics.map(m => `<div style="background:var(--bg3);border-radius:var(--radius);padding:12px;"><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:4px;">${m.lbl}</div><div style="font-family:var(--mono);font-size:15px;font-weight:500;color:${m.color||'var(--text)'};">${m.val}</div><div style="font-size:10px;color:var(--muted);margin-top:2px;">${m.sub}</div></div>`).join('');
+  html += '</div>';
+  html += '<div style="border-top:0.5px solid var(--border);padding-top:1rem;"><p style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:10px;">Saldos dos sites</p>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;">';
+  const saldos = getSaldosAfterSessao(sessoes.find(x=>x._id==id));
+  const raw = sessoes.find(x=>x._id==id);
+  html += SITES.map(site => {
+    const v = saldos[site]||0;
+    const updated = raw.sites?.[site] !== undefined;
+    return `<div style="background:var(--bg3);border-radius:var(--radius);padding:8px 10px;${updated?'border:0.5px solid var(--accent);':''}"><div style="font-size:10px;color:var(--muted);margin-bottom:3px;">${site}${updated?' •':''}</div><div style="font-family:var(--mono);font-size:13px;font-weight:500;color:${v>0?'var(--accent)':'var(--muted)'};">${fmt(v)}</div></div>`;
+  }).join('');
+  html += '</div><p style="font-size:10px;color:var(--muted);margin-top:8px;">• sites atualizados nesta sessão</p></div>';
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;padding-top:1rem;border-top:0.5px solid var(--border);"><button type="button" class="btn btn-danger btn-sm" id="sd-del-btn-inline">Excluir sessão</button><button type="button" class="btn btn-sm" id="sd-edit-btn-inline">Editar</button></div>';
+  document.getElementById('sd-content').innerHTML = html;
+  document.getElementById('sd-edit-btn').onclick = () => openSessaoEdit(id);
+  document.getElementById('sd-edit-btn-inline').onclick = () => openSessaoEdit(id);
+  document.getElementById('sd-del-btn-inline').onclick = () => {
+    document.getElementById('modal-sess-det').classList.remove('show');
+    deletarSessaoById(id);
+  };
+  document.getElementById('modal-sess-det').classList.add('show');
+}
+
+function buildMovSites(targetId) {
+  const sel = document.getElementById(targetId || 'mv-site');
+  if (!sel) return;
+  const current = sel.value; // preservar valor atual
+  sel.innerHTML = '<option value="">— Selecione —</option>' + SITES.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (current) sel.value = current; // restaurar seleção
+}
+
+function updateMovFields() {
+  const tipo = document.getElementById('mv-tipo').value;
+  const siteLabel = document.getElementById('mv-site-label');
+  const info = document.getElementById('mv-auto-info');
+  siteLabel.textContent = tipo === 'Transferência' ? 'Site de origem (De)' : tipo === 'Saque Pendente' ? 'Site de onde sai o dinheiro' : 'Site onde caiu o dinheiro (opcional)';
+
+  const valor = parseFloat(document.getElementById('mv-valor').value)||0;
+  const site = document.getElementById('mv-site').value;
+  let html = '';
+
+  if (tipo === 'Saque Pendente') {
+    if (valor > 0) {
+      html = `<div>− <b>Subtrai ${fmt(valor)}</b> do Total Pendente</div>
+              <div style="color:var(--muted);">Representa a efetivação do saque pela PF.</div>`;
+    } else {
+      html = `<div style="color:var(--muted);">Preencha o valor.</div>`;
+    }
+  } else if (tipo === 'Saldo Inicial') {
+    if (valor > 0) {
+      html = `<div>+ <b>Soma ${fmt(valor)}</b> ao Total Pendente</div>
+              <div style="color:var(--muted);">Saldo inicial vindo de per\u00edodos anteriores.</div>`;
+    } else {
+      html = `<div style="color:var(--muted);">Preencha o valor.</div>`;
+    }
+  } else {
+    if (valor > 0) {
+      html = `<div>+ <b>Soma ${fmt(valor)}</b> ao Total Pendente (como <b>${tipo}</b>)</div>
+              <div style="color:var(--muted);">Entrada que a PF tem direito mas ainda est\u00e1 nos caixas do jogador.</div>`;
+    } else {
+      html = `<div style="color:var(--muted);">Preencha o valor.</div>`;
+    }
+  }
+  info.innerHTML = html;
+}
+
+function openMovModal() {
+  editMovIdx = null;
+  document.getElementById('mov-modal-title').textContent = 'Nova movimentação';
+  document.getElementById('mov-modal-sub').textContent = '';
+  document.getElementById('mv-del-btn').style.display = 'none';
+  document.getElementById('mv-data').value = todayISO();
+  document.getElementById('mv-tipo').value = 'Saque Pendente';
+  ['mv-valor','mv-forma','mv-obs'].forEach(id => document.getElementById(id).value = '');
+  buildMovSites();
+  document.getElementById('mv-site').value = '';
+  updateMovFields();
+  document.getElementById('modal-mov').classList.add('show');
+}
+
+function openMovEdit(idx) {
+  editMovIdx = idx;
+  const m = movs[idx];
+  document.getElementById('mov-modal-title').textContent = 'Editar movimentação';
+  document.getElementById('mov-modal-sub').textContent = m.data;
+  document.getElementById('mv-del-btn').style.display = 'inline-block';
+  document.getElementById('mv-data').value = m.data;
+  document.getElementById('mv-tipo').value = m.tipo;
+  document.getElementById('mv-valor').value = m.valor;
+  buildMovSites();
+  document.getElementById('mv-site').value = m.site || '';
+  document.getElementById('mv-forma').value = m.forma || '';
+  document.getElementById('mv-obs').value = m.obs || '';
+
+  updateMovFields();
+  document.getElementById('modal-mov').classList.add('show');
+}
+
+async function salvarMov() {
+  const data = document.getElementById('mv-data').value;
+  const valor = parseFloat(document.getElementById('mv-valor').value);
+  const tipo = document.getElementById('mv-tipo').value;
+  const site = document.getElementById('mv-site').value;
+  const forma = document.getElementById('mv-forma').value;
+  const obs = document.getElementById('mv-obs').value;
+
+  if (!data) { toast('Informe a data.', true); return; }
+  if (isNaN(valor) || valor <= 0) { toast('Informe um valor válido.', true); return; }
+
+  const movId = editMovIdx !== null ? movs[editMovIdx]._id : Date.now();
+  const mov = { _id: movId, data, tipo, valor, site, forma, obs };
+
+  if (editMovIdx !== null) { movs[editMovIdx] = mov; toast('Movimentação atualizada!'); }
+  else { movs.push(mov); toast('Movimentação registrada!'); }
+
+  // Auto: criar Movimentação na aba Sessões quando Saque Pendente tem site informado
+  if (tipo === 'Saque Pendente' && site && editMovIdx === null) {
+    const lastSaldos = getSaldosBefore(data, null);
+    const saldoAtual = parseFloat(lastSaldos[site] || 0);
+    const novoSaldo = Math.max(0, saldoAtual - valor);
+    const autoSess = {
+      _id: Date.now() + 1,
+      data, tipo: 'Movimentação',
+      buyin: 0, mtt: 0, premiados: 0,
+      obs: `Saque ${fmt(valor)} de ${site} (auto)`,
+      sites: { [site]: novoSaldo },
+      fixedStats: null, pendManual: null
+    };
+    sessoes.push(autoSess);
+    await saveSessoes();
+    toast('Saque registrado + caixa ' + site + ' atualizado automaticamente!');
+  } else {
+    toast(editMovIdx !== null ? 'Movimentação atualizada!' : 'Movimentação registrada!');
+  }
+
+  await saveMovs();
+  closeMovModal();
+  refreshAll();
+}
+
+async function deletarMov() {
+  if (editMovIdx === null) return;
+  if (!confirm('Excluir esta movimentação?')) return;
+  const mid = movs[editMovIdx]._id;
+  await supaFetch('movs', 'DELETE', null, `?id=eq.${mid}`);
+  movs.splice(editMovIdx, 1);
+  closeMovModal();
+  refreshAll();
+  toast('Movimentação excluída.');
+}
+
+function closeMovModal() {
+  document.getElementById('modal-mov').classList.remove('show');
+  editMovIdx = null;
+}
+
+function renderMov() {
+  const tipoF = document.getElementById('mov-filter-tipo')?.value || '';
+  const from = document.getElementById('mov-from')?.value || '';
+  const to = document.getElementById('mov-to')?.value || '';
+
+  const label = document.getElementById('mov-periodo-label');
+  if (label) label.textContent = (from || to) ? 'Período: '+(from||'…')+' → '+(to||'…') : '';
+
+  const inPeriod = movs.filter(m => {
+    if (from && m.data < from) return false;
+    if (to && m.data > to) return false;
+    return true;
+  });
+  const filtered = inPeriod.filter(m => !tipoF || m.tipo === tipoF);
+  const sorted = [...filtered].sort((a,b) => b.data.localeCompare(a.data) || b._id - a._id);
+
+  // Totais por categoria NO PERÍODO
+  const tDiv = inPeriod.filter(m=>m.tipo==='Dividendo').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tJog = inPeriod.filter(m=>m.tipo==='Jogador').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tSal = inPeriod.filter(m=>m.tipo==='Salário').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tOut = inPeriod.filter(m=>m.tipo==='Outro').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tIni = inPeriod.filter(m=>m.tipo==='Saldo Inicial').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+  const tSacado = inPeriod.filter(m=>m.tipo==='Saque Pendente').reduce((a,m)=>a+parseFloat(m.valor||0),0);
+
+  const cats = [
+    { nome:'Dividendos',    tipo:'Dividendo',     color:'var(--purple)', val:tDiv },
+    { nome:'Jogador',       tipo:'Jogador',       color:'var(--blue)',   val:tJog },
+    { nome:'Salário',       tipo:'Salário',       color:'var(--accent)', val:tSal },
+    { nome:'Outro',         tipo:'Outro',         color:'var(--muted)',  val:tOut },
+    { nome:'Saldo Inicial', tipo:'Saldo Inicial', color:'var(--amber)',  val:tIni },
+  ];
+  const total = cats.reduce((a,c)=>a+c.val,0);
+
+  document.getElementById('mov-resumo-body').innerHTML = cats.filter(c=>c.val>0).map(c => {
+    const pct = total>0 ? (c.val/total*100).toFixed(1) : '0';
+    const qtd = inPeriod.filter(m=>m.tipo===c.tipo).length;
+    return `<tr style="border-bottom:0.5px solid var(--border);">
+      <td style="padding:10px 16px;"><div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:${c.color};display:inline-block;"></span><span style="font-size:13px;">${c.nome}</span></div><div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:6px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${c.color};"></div></div></td>
+      <td style="padding:10px 16px;text-align:right;font-family:var(--mono);font-weight:500;color:${c.color};white-space:nowrap;">${fmt(c.val)}</td>
+      <td style="padding:10px 16px;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap;">${pct}%<br>${qtd} reg.</td>
+    </tr>`;
+  }).join('') || '<tr><td class="empty" colspan="3">Sem dados no período.</td></tr>';
+
+  document.getElementById('mov-resumo-foot').innerHTML = `<tr style="background:var(--bg3);"><td style="padding:12px 16px;font-weight:500;">Total entradas</td><td style="padding:12px 16px;text-align:right;font-family:var(--mono);font-weight:500;color:var(--accent);">${fmt(total)}</td><td style="padding:12px 16px;text-align:right;font-size:11px;color:var(--muted);">100%</td></tr>`;
+
+  // Total Pendente ATUAL (todas as movs, não apenas do período)
+  const pendAtual = totalPendente();
+  document.getElementById('mov-pend-val').textContent = fmt(pendAtual);
+  document.getElementById('mov-pend-qtd').textContent = '';
+
+  document.getElementById('mov-rec-val').textContent = fmt(tSacado);
+  document.getElementById('mov-rec-qtd').textContent = inPeriod.filter(m=>m.tipo==='Saque Pendente').length + ' saque(s)';
+  document.getElementById('mov-count').textContent = inPeriod.length + (from||to ? ' no período · ' : ' total · ') + movs.length + ' registros';
+
+  const tbody = document.getElementById('mov-body');
+  if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhuma movimentação.</td></tr>'; return; }
+
+  // Calcular saldo pendente acumulado por linha (cronológico)
+  const chron = [...movs].sort((a,b) => a.data.localeCompare(b.data) || a._id - b._id);
+  let acum = 0;
+  const pendByMov = {};
+  chron.forEach(m => {
+    const v = parseFloat(m.valor||0);
+    if (m.tipo === 'Saque Pendente') acum -= v;
+    else acum += v;
+    pendByMov[m._id] = acum;
+  });
+
+  const tipoColor = {
+    'Saque Pendente':'var(--amber)',
+    'Dividendo':'var(--purple)',
+    'Jogador':'var(--blue)',
+    'Salário':'var(--accent)',
+    'Outro':'var(--muted)',
+    'Saldo Inicial':'var(--amber)'
+  };
+
+  tbody.innerHTML = sorted.map(m => {
+    const idx = movs.findIndex(x => x._id === m._id);
+    const valorColor = m.tipo === 'Saque Pendente' ? 'var(--red)' : 'var(--accent)';
+    const valorPrefix = m.tipo === 'Saque Pendente' ? '−' : '+';
+    return `<tr style="cursor:pointer;" onclick="openMovEdit(${idx})">
+      <td class="sans">${m.data}</td>
+      <td style="color:${valorColor};">${valorPrefix}${fmt(m.valor)}</td>
+      <td><span style="font-size:11px;font-weight:500;color:${tipoColor[m.tipo]||'var(--text)'};">${m.tipo}</span></td>
+      <td class="sans">${m.site||'—'}</td>
+      <td style="color:var(--muted);">${m.forma||'—'}</td>
+      <td style="color:var(--amber);">${fmt(pendByMov[m._id])}</td>
+      <td><button class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();openMovEdit(${idx})">editar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function limparFiltroMov() {
+  document.getElementById('mov-from').value = '';
+  document.getElementById('mov-to').value = '';
+  renderMov();
+}
+
+function renderResumo() {
+  const mesesNomes = ['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
+  const ano = new Date().getFullYear();
+  const computed = computeSessoes();
+  const grind = computed.filter(s => s.tipo === 'Grind');
+
+  // Agrupar por mês
+  const porMes = Array.from({length: 12}, (_, i) => {
+    const mes = String(i + 1).padStart(2, '0');
+    const prefix = `${ano}-${mes}`;
+    const sessoesMes = grind.filter(s => s.data.startsWith(prefix));
+    if (!sessoesMes.length) return null;
+
+    const mtt       = sessoesMes.reduce((a,s) => a + s.mtt, 0);
+    const buyin     = sessoesMes.reduce((a,s) => a + s.buyin, 0);
+    const liquido   = sessoesMes.reduce((a,s) => a + s.liquido, 0);
+    const premiados = sessoesMes.reduce((a,s) => {
+      if (s.fixedStats) return a + Math.round(s.mtt * s.fixedStats.itm / 100);
+      return a + s.prem;
+    }, 0);
+
+    const roi     = buyin > 0 ? (liquido / buyin) * 100 : 0;
+    const itm     = mtt > 0 ? (premiados / mtt) * 100 : 0;
+    const avgBI   = mtt > 0 ? buyin / mtt : 0;
+    const lucroMed = mtt > 0 ? liquido / mtt : 0;
+
+    return { mes: i, mtt, buyin, liquido, roi, itm, avgBI, lucroMed };
+  });
+
+  const tbody = document.getElementById('resumo-body');
+  const tfoot = document.getElementById('resumo-foot');
+  if (!tbody) return;
+
+  const rows = porMes.filter(m => m !== null);
+
+  // Totais gerais
+  const totMtt      = rows.reduce((a,m) => a + m.mtt, 0);
+  const totBuyin    = rows.reduce((a,m) => a + m.buyin, 0);
+  const totLiquido  = rows.reduce((a,m) => a + m.liquido, 0);
+  const totPrem     = rows.reduce((a,m) => a + Math.round(m.mtt * m.itm / 100), 0);
+  const totROI      = totBuyin > 0 ? (totLiquido / totBuyin) * 100 : 0;
+  const totITM      = totMtt > 0 ? (totPrem / totMtt) * 100 : 0;
+  const totAvgBI    = totMtt > 0 ? totBuyin / totMtt : 0;
+  const totLucroMed = totMtt > 0 ? totLiquido / totMtt : 0;
+
+  // Cards de totais
+  const totaisEl = document.getElementById('resumo-totais');
+  if (totaisEl) {
+    const cards = [
+      { lbl: 'Torneios no ano', val: totMtt.toLocaleString('pt-BR'), sub: rows.length + ' meses', color: 'var(--text)' },
+      { lbl: 'ITM médio', val: fmtPct(totITM), sub: totPrem + ' premiados', color: 'var(--text)' },
+      { lbl: 'ROI médio', val: fmtPct(totROI), sub: 'ponderado', color: totROI>=0?'var(--accent)':'var(--red)' },
+      { lbl: 'AVG Buy-in', val: fmt(totAvgBI), sub: 'por torneio', color: 'var(--text)' },
+      { lbl: 'Lucro médio', val: fmt(totLucroMed), sub: 'por torneio', color: totLucroMed>=0?'var(--accent)':'var(--red)' },
+      { lbl: 'Total líquido', val: fmt(totLiquido), sub: 'resultado do ano', color: totLiquido>=0?'var(--accent)':'var(--red)' },
+    ];
+    totaisEl.innerHTML = cards.map(c => `
+      <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:18px 20px;">
+        <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:8px;">${c.lbl}</div>
+        <div style="font-family:var(--mono);font-size:24px;font-weight:500;color:${c.color};">${c.val}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">${c.sub}</div>
+      </div>`).join('');
+  }
+
+  // Linhas da tabela
+  const mesesCompletos = ['jan.','fev.','mar.','abr.','mai.','jun.','jul.','ago.','set.','out.','nov.','dez.'];
+  tbody.innerHTML = rows.map((m, idx) => {
+    const isPositive = m.liquido >= 0;
+    const bg = idx % 2 === 0 ? 'var(--bg2)' : 'var(--bg3)';
+    return `<tr style="background:${bg};transition:background 0.15s;" onmouseover="this.style.background='rgba(0,217,160,0.04)'" onmouseout="this.style.background='${bg}'">
+      <td style="padding:18px 24px;font-family:var(--font);font-size:16px;font-weight:600;color:var(--text);border-bottom:0.5px solid var(--border);">${mesesCompletos[m.mes]}</td>
+      <td style="padding:18px 20px;text-align:right;font-family:var(--mono);font-size:15px;border-bottom:0.5px solid var(--border);">${m.mtt.toLocaleString('pt-BR')}</td>
+      <td style="padding:18px 20px;text-align:right;font-family:var(--mono);font-size:15px;border-bottom:0.5px solid var(--border);">${fmtPct(m.itm)}</td>
+      <td style="padding:18px 20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:500;color:${m.roi>=0?'var(--accent)':'var(--red)'};border-bottom:0.5px solid var(--border);">${fmtPct(m.roi)}</td>
+      <td style="padding:18px 20px;text-align:right;font-family:var(--mono);font-size:15px;border-bottom:0.5px solid var(--border);">${fmt(m.avgBI)}</td>
+      <td style="padding:18px 20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:500;color:${m.lucroMed>=0?'var(--accent)':'var(--red)'};border-bottom:0.5px solid var(--border);">${fmt(m.lucroMed)}</td>
+      <td style="padding:18px 24px;text-align:right;font-family:var(--mono);font-size:17px;font-weight:600;color:${isPositive?'var(--accent)':'var(--red)'};border-bottom:0.5px solid var(--border);">${fmt(m.liquido)}</td>
+    </tr>`;
+  }).join('');
+
+  // Rodapé — Total Geral
+  tfoot.innerHTML = `
+    <tr style="background:var(--bg3);border-top:1px solid var(--border2);">
+      <td style="padding:20px 24px;font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);">Total geral</td>
+      <td style="padding:20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:600;">${totMtt.toLocaleString('pt-BR')}</td>
+      <td style="padding:20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:600;">${fmtPct(totITM)}</td>
+      <td style="padding:20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:600;color:${totROI>=0?'var(--accent)':'var(--red)'};">${fmtPct(totROI)}</td>
+      <td style="padding:20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:600;">${fmt(totAvgBI)}</td>
+      <td style="padding:20px;text-align:right;font-family:var(--mono);font-size:15px;font-weight:600;color:${totLucroMed>=0?'var(--accent)':'var(--red)'};">${fmt(totLucroMed)}</td>
+      <td style="padding:20px 24px;text-align:right;font-family:var(--mono);font-size:20px;font-weight:700;color:${totLiquido>=0?'var(--accent)':'var(--red)'};">${fmt(totLiquido)}</td>
+    </tr>`;
+
+  document.getElementById('resumo-ano').textContent = `${ano} · ${rows.length} meses registrados · ${totMtt.toLocaleString('pt-BR')} torneios`;
+}
+
+
+// ============ FIELDS ============
+let fields = [];
+let editFieldIdx = null;
+
+async function saveFields() {
+  const rows = fields.map(f => ({
+    id: f._id, data: f.data, sg: f.sg||0, g: f.g||0,
+    m: f.m||0, p: f.p||0, sp: f.sp||0, obs: f.obs||''
+  }));
+  await supaFetch('fields', 'POST', rows);
+}
+
+function openFieldModal() {
+  editFieldIdx = null;
+  document.getElementById('field-modal-title').textContent = 'Registrar field da sessão';
+  document.getElementById('field-modal-sub').textContent = '';
+  document.getElementById('fld-del-btn').style.display = 'none';
+  document.getElementById('fld-data').value = todayISO();
+  document.getElementById('fld-obs').value = '';
+  ['fld-sg','fld-g','fld-m','fld-p','fld-sp'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fld-total').value = '';
+  document.getElementById('fld-aviso').style.display = 'none';
+  document.getElementById('modal-field').classList.add('show');
+}
+
+function openFieldEdit(idx) {
+  editFieldIdx = idx;
+  const f = fields[idx];
+  document.getElementById('field-modal-title').textContent = 'Editar field';
+  document.getElementById('field-modal-sub').textContent = f.data;
+  document.getElementById('fld-del-btn').style.display = 'inline-block';
+  document.getElementById('fld-data').value = f.data;
+  document.getElementById('fld-obs').value = f.obs || '';
+  document.getElementById('fld-sg').value = f.sg || '';
+  document.getElementById('fld-g').value  = f.g  || '';
+  document.getElementById('fld-m').value  = f.m  || '';
+  document.getElementById('fld-p').value  = f.p  || '';
+  document.getElementById('fld-sp').value = f.sp || '';
+  updateFieldTotal();
+  document.getElementById('modal-field').classList.add('show');
+}
+
+function closeFieldModal() {
+  document.getElementById('modal-field').classList.remove('show');
+  editFieldIdx = null;
+}
+
+function updateFieldTotal() {
+  const sg = parseFloat(document.getElementById('fld-sg').value)||0;
+  const g  = parseFloat(document.getElementById('fld-g').value)||0;
+  const m  = parseFloat(document.getElementById('fld-m').value)||0;
+  const p  = parseFloat(document.getElementById('fld-p').value)||0;
+  const sp = parseFloat(document.getElementById('fld-sp').value)||0;
+  const tot = sg + g + m + p + sp;
+  document.getElementById('fld-total').value = tot.toFixed(2) + '%';
+  const aviso = document.getElementById('fld-aviso');
+  if (tot > 0 && Math.abs(tot - 100) > 0.5) {
+    aviso.style.display = 'block';
+  } else {
+    aviso.style.display = 'none';
+  }
+}
+
+async function salvarField() {
+  const data = document.getElementById('fld-data').value;
+  if (!data) { toast('Informe a data.', true); return; }
+  const sg = parseFloat(document.getElementById('fld-sg').value)||0;
+  const g  = parseFloat(document.getElementById('fld-g').value)||0;
+  const m  = parseFloat(document.getElementById('fld-m').value)||0;
+  const p  = parseFloat(document.getElementById('fld-p').value)||0;
+  const sp = parseFloat(document.getElementById('fld-sp').value)||0;
+  const obs = document.getElementById('fld-obs').value;
+
+  const rec = { _id: editFieldIdx !== null ? fields[editFieldIdx]._id : Date.now(), data, sg, g, m, p, sp, obs };
+  if (editFieldIdx !== null) { fields[editFieldIdx] = rec; toast('Atualizado!'); }
+  else { fields.push(rec); toast('Field registrado!'); }
+  fields.sort((a,b) => a.data.localeCompare(b.data));
+  saveFields();
+  closeFieldModal();
+  renderFields();
+}
+
+async function deletarField() {
+  if (editFieldIdx === null) return;
+  if (!confirm('Excluir este registro?')) return;
+  const fid = fields[editFieldIdx]._id;
+  await supaFetch('fields', 'DELETE', null, `?id=eq.${fid}`);
+  fields.splice(editFieldIdx, 1);
+  closeFieldModal();
+  renderFields();
+  toast('Excluído.');
+}
+
+function renderFields() {
+  const tbody = document.getElementById('fields-body');
+  const resumoEl = document.getElementById('fields-resumo');
+  if (!tbody) return;
+
+  document.getElementById('fields-sub').textContent = fields.length + ' sessões registradas';
+
+  const CATS = ['sg','g','m','p','sp'];
+  const NAMES = ['SG','G','M','P','SP'];
+  const COLORS = ['#a78bfa','#3b82f6','#00d9a0','#f59e0b','#f05252'];
+
+  // Resumo por mês
+  const ano = new Date().getFullYear();
+  const mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  if (resumoEl) {
+    const porMes = {};
+    fields.forEach(f => {
+      const mes = f.data.substring(0,7);
+      if (!porMes[mes]) porMes[mes] = [];
+      porMes[mes].push(f);
+    });
+
+    resumoEl.innerHTML = Object.entries(porMes).sort().map(([mes, recs]) => {
+      const avgCats = CATS.map(c => recs.reduce((a,r) => a + (parseFloat(r[c])||0), 0) / recs.length);
+      const [y, m] = mes.split('-');
+      const nomeMes = mesesNomes[parseInt(m)-1] + ' ' + y;
+      const grande = avgCats[0] + avgCats[1];
+      const medio  = avgCats[2];
+      const curto  = avgCats[3] + avgCats[4];
+
+      // Barras individuais
+      const CATS_DEF = [
+        { nome:'SG', val: avgCats[0], color:'#a78bfa' },
+        { nome:'G',  val: avgCats[1], color:'#3b82f6' },
+        { nome:'M',  val: avgCats[2], color:'#00d9a0' },
+        { nome:'P',  val: avgCats[3], color:'#f59e0b' },
+        { nome:'SP', val: avgCats[4], color:'#f05252' },
+      ];
+      const bars = CATS_DEF.map(c => `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+          <span style="font-size:11px;font-weight:600;color:${c.color};width:20px;">${c.nome}</span>
+          <div style="flex:1;height:7px;background:var(--bg3);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${Math.min(c.val,100)}%;background:${c.color};border-radius:4px;"></div>
+          </div>
+          <span style="font-size:12px;font-family:var(--mono);color:var(--text);min-width:40px;text-align:right;">${c.val.toFixed(1)}%</span>
+        </div>`).join('') +
+        // Separador + grupos
+        `<div style="border-top:0.5px solid var(--border);margin:10px 0 8px;"></div>
+        <div style="display:flex;gap:6px;">
+          <div style="flex:1;background:rgba(91,141,245,0.1);border:0.5px solid rgba(91,141,245,0.3);border-radius:8px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;color:#5b8df5;font-weight:600;margin-bottom:3px;">🔵 Grande</div>
+            <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:#5b8df5;">${grande.toFixed(1)}%</div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px;">SG+G</div>
+          </div>
+          <div style="flex:1;background:rgba(0,217,160,0.08);border:0.5px solid rgba(0,217,160,0.25);border-radius:8px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;color:#00d9a0;font-weight:600;margin-bottom:3px;">🟢 Médio</div>
+            <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:#00d9a0;">${medio.toFixed(1)}%</div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px;">M</div>
+          </div>
+          <div style="flex:1;background:rgba(248,113,113,0.08);border:0.5px solid rgba(248,113,113,0.25);border-radius:8px;padding:8px 10px;text-align:center;">
+            <div style="font-size:10px;color:#f87171;font-weight:600;margin-bottom:3px;">🔴 Curto</div>
+            <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:#f87171;">${curto.toFixed(1)}%</div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px;">P+SP</div>
+          </div>
+        </div>`;
+
+      return `<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <span style="font-size:14px;font-weight:500;">${nomeMes}</span>
+          <span style="font-size:11px;color:var(--muted);">${recs.length} sessão(ões)</span>
+        </div>
+        ${bars}
+      </div>`;
+    }).join('') || '<p class="empty">Nenhum dado registrado ainda.</p>';
+  }
+
+  // Tabela
+  if (!fields.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Nenhum registro. Clique em "+ Registrar sessão".</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = [...fields].reverse().map((f, ri) => {
+    const idx = fields.length - 1 - ri;
+    const tot = (parseFloat(f.sg)||0)+(parseFloat(f.g)||0)+(parseFloat(f.m)||0)+(parseFloat(f.p)||0)+(parseFloat(f.sp)||0);
+    const totColor = Math.abs(tot-100) < 0.5 ? 'var(--accent)' : 'var(--amber)';
+    return `<tr style="cursor:pointer;border-bottom:0.5px solid var(--border);" onclick="openFieldEdit(${idx})">
+      <td class="sans" style="padding:14px 20px;font-size:13px;">${f.data}${f.obs ? '<br><span style="font-size:11px;color:var(--muted);">'+f.obs+'</span>' : ''}</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:13px;color:#a78bfa;">${f.sg ? f.sg+'%' : '—'}</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:13px;color:#3b82f6;">${f.g  ? f.g +'%' : '—'}</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:14px;font-weight:600;color:#5b8df5;background:rgba(91,141,245,0.06);">${((parseFloat(f.sg)||0)+(parseFloat(f.g)||0)).toFixed(1)}%</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:13px;color:#00d9a0;">${f.m  ? f.m +'%' : '—'}</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:13px;color:#f59e0b;">${f.p  ? f.p +'%' : '—'}</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:13px;color:#f05252;">${f.sp ? f.sp+'%' : '—'}</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:14px;font-weight:600;color:#f87171;background:rgba(248,113,113,0.06);">${((parseFloat(f.p)||0)+(parseFloat(f.sp)||0)).toFixed(1)}%</td>
+      <td style="padding:14px 16px;text-align:center;font-family:var(--mono);font-size:13px;color:${totColor};">${tot.toFixed(1)}%</td>
+      <td style="padding:14px 20px;"><button class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();openFieldEdit(${idx})">editar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function refreshAll() {
+  renderStrip();
+  renderDashboard();
+  renderSessoes();
+  renderMov();
+}
+
+function openImportModal() {
+  document.getElementById('import-area').value = '';
+  document.getElementById('modal-import').classList.add('show');
+}
+
+function exportData() {
+  const data = { sessoes, movs, fields, exportedAt: new Date().toISOString() };
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('import-area').value = json;
+  navigator.clipboard?.writeText(json);
+  toast('JSON copiado para área de transferência!');
+}
+
+async function importData() {
+  const txt = document.getElementById('import-area').value.trim();
+  if (!txt) { toast('Cole o JSON primeiro.', true); return; }
+  try {
+    const parsed = JSON.parse(txt);
+    if (!parsed.sessoes || !parsed.movs) { toast('JSON inválido.', true); return; }
+    const nFields = parsed.fields ? parsed.fields.length : 0;
+    if (!confirm(`Isto vai SUBSTITUIR TODOS os dados:\n\n• ${parsed.sessoes.length} sessões\n• ${parsed.movs.length} movimentações\n• ${nFields} fields\n\nContinuar?`)) return;
+    showLoading(true);
+    await supaFetch('sessoes', 'DELETE', null, '?id=gt.0');
+    await supaFetch('movs',    'DELETE', null, '?id=gt.0');
+    await supaFetch('fields',  'DELETE', null, '?id=gt.0');
+    sessoes = parsed.sessoes;
+    movs    = parsed.movs;
+    fields  = parsed.fields || [];
+    await saveSessoes();
+    await saveMovs();
+    await saveFields();
+    showLoading(false);
+    document.getElementById('modal-import').classList.remove('show');
+    refreshAll();
+    toast('Dados importados com sucesso!');
+  } catch (e) {
+    showLoading(false);
+    toast('Erro: ' + e.message, true);
+  }
+}
+
+async function limparTudo() {
+  if (!confirm('ATENÇÃO: Isto vai apagar TODAS as sessões, movimentações e fields. Continuar?')) return;
+  if (!confirm('Tem certeza? Esta ação é irreversível.')) return;
+  showLoading(true);
+  await supaFetch('sessoes', 'DELETE', null, '?id=gt.0');
+  await supaFetch('movs',    'DELETE', null, '?id=gt.0');
+  await supaFetch('fields',  'DELETE', null, '?id=gt.0');
+  sessoes = []; movs = []; fields = [];
+  showLoading(false);
+  document.getElementById('modal-import').classList.remove('show');
+  refreshAll();
+  toast('Todos os dados foram apagados.');
+}
+
+loadAllData();
+</script>
+
+<style>
+#login-screen {
+  display: flex; position: fixed; inset: 0; z-index: 9999;
+  background: #0a0c10; align-items: center; justify-content: center;
+}
+.login-box {
+  background: #13161e; border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px; padding: 40px; width: 320px; text-align: center;
+}
+.login-box h2 { font-size: 16px; font-weight: 700; color: #00d9a0; margin-bottom: 6px; letter-spacing: 0.06em; }
+.login-box p { font-size: 12px; color: #4a5268; margin-bottom: 24px; }
+.login-box input {
+  width: 100%; background: #1a1e28; border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px; padding: 12px; color: #e2e6f0;
+  font-family: inherit; font-size: 18px; text-align: center;
+  letter-spacing: 0.2em; outline: none; margin-bottom: 12px;
+}
+.login-box input:focus { border-color: #00d9a0; }
+.login-box button {
+  width: 100%; background: #00d9a0; color: #080a0f; border: none;
+  border-radius: 6px; padding: 12px; font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.login-box button:hover { opacity: 0.88; }
+.login-error { color: #ff5050; font-size: 12px; margin-top: 8px; display: none; }
+</style>
+<div id="login-screen">
+  <div class="login-box">
+    <h2>◈ BANKROLL MGR</h2>
+    <p>Digite a senha para continuar</p>
+    <input type="password" id="login-input" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkLogin()" autofocus />
+    <button onclick="checkLogin()">Entrar</button>
+    <div class="login-error" id="login-error">Senha incorreta</div>
+  </div>
+</div>
+<script>
+function checkLogin() {
+  const val = document.getElementById('login-input').value;
+  const h = val.split('').reduce((a,c)=>Math.imul(31,a)+c.charCodeAt(0)|0,0);
+  if (h === 1480989278) {
+    document.getElementById('login-screen').style.display = 'none';
+    sessionStorage.setItem('br_auth','1');
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('login-input').value = '';
+    document.getElementById('login-input').focus();
+  }
+}
+// Se já autenticou nessa sessão, pular login
+if (sessionStorage.getItem('br_auth') === '1') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const s = document.getElementById('login-screen');
+    if(s) s.style.display = 'none';
+  });
+}
+</script>
+</body>
+</html>
