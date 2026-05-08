@@ -803,8 +803,10 @@ function renderDashboard() {
     { lbl: 'Lucro líquido', val: fmt(totalJogador), cls: totalJogador>=0?'pos':'neg', sub: 'receita do jogador (movimentação)' },
   ];
 
+  const brBrutoAtual = sumSites(getLastSites());
+  const brLivreAtual = brBrutoAtual - tPend;
   const statsFinanceiro = [
-    { lbl: 'Bankroll livre', val: fmt(last.brReal), cls: last.brReal>=0?'pos':'neg', sub: fmt(last.brBruto)+' bruto − '+fmt(tPend)+' pend.' },
+    { lbl: 'Bankroll livre', val: fmt(brLivreAtual), cls: brLivreAtual>=0?'pos':'neg', sub: fmt(brBrutoAtual)+' bruto − '+fmt(tPend)+' pend.' },
     { lbl: 'Total investido', val: fmt(totalBuyin), cls: '', sub: 'em buy-ins no período' },
   ];
 
@@ -941,7 +943,19 @@ function renderSessoes() {
     return Math.max(0, pend);
   }
 
-  tbody.innerHTML = list.map(s => {
+  const brBrutoNow = sumSites(getLastSites());
+  const pendNow = totalPendente();
+  const brLivreNow = brBrutoNow - pendNow;
+  const linhaAtual = `<tr style="background:rgba(0,217,160,0.04);border-bottom:1px solid rgba(0,217,160,0.15);">
+    <td class="sans" style="color:var(--accent);font-size:11px;">ATUAL</td>
+    <td><span class="badge" style="background:rgba(0,217,160,0.12);color:var(--accent);font-size:10px;">hoje</span></td>
+    <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+    <td style="color:var(--accent);font-weight:500;">${fmt(brLivreNow)}</td>
+    <td style="color:var(--amber);font-family:var(--mono);font-size:12px;">${fmt(pendNow)}</td>
+    <td></td>
+  </tr>`;
+
+  tbody.innerHTML = linhaAtual + list.map(s => {
     const isG = s.tipo === 'Grind';
     const pendNaData = getPendNaData(s.data);
     return `<tr data-sid="${s._id}" style="cursor:pointer;">
